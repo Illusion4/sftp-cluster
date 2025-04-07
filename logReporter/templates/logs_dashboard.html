@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SFTP Log Analytics</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; }
+        .stats-card { 
+            background: #f8f9fa; 
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .grid-container { 
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 2rem;
+        }
+        .plot-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        img { 
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        h1 { color: #2c3e50; margin-bottom: 2rem; }
+        h2 { color: #34495e; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>SFTP Cluster Logs Report</h1>
+    
+    <div class="stats-card">
+        <h2>Summary Statistics</h2>
+        <p>📊 Total Entries: <strong>{{ stats.total_entries }}</strong></p>
+        <p>🖥️ Unique VMs: <strong>{{ stats.unique_vms }}</strong></p>
+        <p>⏳ First Entry: <strong>{{ stats.first_entry }}</strong></p>
+        <p>⌛ Last Entry: <strong>{{ stats.last_entry }}</strong></p>
+    </div>
+
+    <div class="grid-container">
+        {% for plot_name, plot_file in plots.items() %}
+        <div class="plot-card">
+            <h3>{{ plot_name|replace('_', ' ')|title }}</h3>
+            <img src="{{ url_for('static', filename=plot_file) }}" 
+                 alt="{{ plot_name }} visualization">
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
