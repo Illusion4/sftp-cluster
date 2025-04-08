@@ -1,0 +1,20 @@
+version: '3.7'
+services:
+  app:
+    build: .
+    container_name: log_reporter_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - /home/vagrant/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:6
+    container_name: log_reporter_mongo
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

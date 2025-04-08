@@ -2,38 +2,47 @@
 <html>
 <head>
     <title>SFTP Log Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 2rem; }
-        .stats-card { 
-            background: #f8f9fa; 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2rem;
+            background-color: #f4f6f8;
+        }
+        .stats-card {
+            background: #ffffff;
             border-radius: 10px;
             padding: 1.5rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         }
-        .grid-container { 
+        .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 2rem;
         }
-        .plot-card {
-            background: white;
-            padding: 1rem;
+        .chart-card {
+            background: #ffffff;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1rem;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         }
-        img { 
-            width: 100%;
-            height: auto;
-            border-radius: 4px;
+        canvas {
+            width: 100% !important;
+            height: 400px !important;
         }
-        h1 { color: #2c3e50; margin-bottom: 2rem; }
-        h2 { color: #34495e; margin-top: 0; }
+        h1 {
+            color: #2c3e50;
+        }
+        h2 {
+            color: #34495e;
+        }
     </style>
+    <meta http-equiv="refresh" content="300">
 </head>
 <body>
     <h1>SFTP Cluster Logs Report</h1>
-    
+
     <div class="stats-card">
         <h2>Summary Statistics</h2>
         <p>📊 Total Entries: <strong>{{ stats.total_entries }}</strong></p>
@@ -43,13 +52,60 @@
     </div>
 
     <div class="grid-container">
-        {% for plot_name, plot_file in plots.items() %}
-        <div class="plot-card">
-            <h3>{{ plot_name|replace('_', ' ')|title }}</h3>
-            <img src="{{ url_for('static', filename=plot_file) }}" 
-                 alt="{{ plot_name }} visualization">
+        <div class="chart-card">
+            <h3>📅 Daily Activity</h3>
+            <canvas id="dailyChart"></canvas>
         </div>
-        {% endfor %}
+        <div class="chart-card">
+            <h3>🖥️ VM Activity</h3>
+            <canvas id="vmChart"></canvas>
+        </div>
     </div>
+
+    <script>
+        const dailyLabels = JSON.parse('{{ daily_labels|tojson|safe }}');
+        const dailyCounts = JSON.parse('{{ daily_counts|tojson|safe }}');
+        const vmLabels = JSON.parse('{{ vm_labels|tojson|safe }}');
+        const vmCounts = JSON.parse('{{ vm_counts|tojson|safe }}');
+
+        const dailyChart = new Chart(document.getElementById('dailyChart'), {
+            type: 'bar',
+            data: {
+                labels: dailyLabels,
+                datasets: [{
+                    label: 'Log Entries per Day',
+                    data: dailyCounts,
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { ticks: { maxRotation: 90, minRotation: 45 }},
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        const vmChart = new Chart(document.getElementById('vmChart'), {
+            type: 'bar',
+            data: {
+                labels: vmLabels,
+                datasets: [{
+                    label: 'Log Entries per VM',
+                    data: vmCounts,
+                    backgroundColor: 'rgba(255, 99, 132, 0.7)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+        
+    </script>
 </body>
 </html>
+
