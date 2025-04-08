@@ -84,5 +84,6 @@ sudo sed -i 's/^MIRRORS_MODE=.*/MIRRORS_MODE=0/' /etc/rkhunter.conf || echo "MIR
 
 rkhunter --update
 rkhunter --propupd
+rkhunter --check --sk || true
 
 echo "[✅] Provisioning complete. SFTP setup and SSH hardened."

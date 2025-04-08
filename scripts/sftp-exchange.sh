@@ -2,19 +2,20 @@
 
 NEIGHBORS=("192.168.88.10" "192.168.88.11" "192.168.88.12")
 THIS_IP=$(hostname -I | awk '{print $2}')
+THIS_HOSTNAME=$(hostname)
 USERNAME="sftp"
 REMOTE_DIR="uploads"
 KEY_PATH="/home/sftp/.ssh/id_rsa"
 
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-LOG_ENTRY="[$TIMESTAMP] created_by=${THIS_IP}"
+LOG_ENTRY="[$TIMESTAMP] from=${THIS_HOSTNAME}"
 
 for IP in "${NEIGHBORS[@]}"; do
   if [[ "$IP" == "$THIS_IP" ]]; then
       continue
   fi
 
-  TARGET_FILE="from_${THIS_IP}.txt"
+  TARGET_FILE="from_${THIS_HOSTNAME}.txt"
   TMP_LOCAL="/tmp/${TARGET_FILE}"
 
   if sftp -i "$KEY_PATH" -o StrictHostKeyChecking=no "${USERNAME}@${IP}" <<< "ls ${REMOTE_DIR}/${TARGET_FILE}" &>/dev/null; then
@@ -34,3 +35,4 @@ EOF
 
   rm -f "$TMP_LOCAL"
 done
+
