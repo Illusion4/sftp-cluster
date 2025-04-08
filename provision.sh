@@ -68,13 +68,6 @@ sudo -u sftp crontab -l | { cat; echo "*/5 * * * * /home/sftp/scripts/sftp-excha
 
 echo "[✓] Cron job installed."
 
-echo "[🔒] Hardening SSH settings..."
-
-sudo sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i -E 's/^#?PermitEmptyPasswords .*/PermitEmptyPasswords no/' /etc/ssh/sshd_config
-
-echo "[✓] Password authentication disabled"
-
 echo "[↻] Restarting SSH service..."
 
 sudo systemctl restart ssh
