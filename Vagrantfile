@@ -5,6 +5,7 @@ hosts = {
   "sftp1" => "192.168.88.10",
   "sftp2" => "192.168.88.11",
   "sftp3" => "192.168.88.12",
+  "docker-log-reporter" => "192.168.88.13"
 }
 
 host_key_path = File.expand_path("~/.ssh/vagrant_host_key")
@@ -42,6 +43,7 @@ Vagrant.configure("2") do |config|
   hosts.each do |name, ip|
     config.vm.define name do |machine|
       machine.vm.network :private_network, ip: ip
+      machine.vm.hostname = name
       machine.vm.provider "virtualbox" do |vb|
         vb.name = name
         vb.gui = false
@@ -63,9 +65,15 @@ Vagrant.configure("2") do |config|
         source: combined_sftp_auth,
         destination: "/tmp/sftp_authorized_keys"
 
-      machine.vm.provision "file", source: "scripts", destination: "/tmp/"
-      machine.vm.provision "shell", path: "provision.sh"
+      if name == "docker-log-reporter"
+        machine.vm.synced_folder "./logReporter", "/home/vagrant/dashboard"
+        machine.vm.provision "shell", path: "docker-provision.sh"
+
+      else
+        machine.vm.provision "file", source: "scripts", destination: "/tmp/"
+        machine.vm.provision "shell", path: "provision.sh"
+        
+      end
     end
   end
 end
-

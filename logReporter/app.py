@@ -1,114 +1,195 @@
 from flask import Flask, render_template
 import paramiko
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 from datetime import datetime
 import os
-from collections import defaultdict, Counter
+from pymongo import MongoClient
 
-app = Flask(__name__)
+APP = Flask(__name__)
 
 VM_IPS = ["192.168.88.10", "192.168.88.11", "192.168.88.12"]
-SSH_USERNAME = "sftp"
-SSH_KEY_PATH = os.path.expanduser("~/.ssh/vagrant_host_key")
-REMOTE_LOG_DIR = "uploads"
-STATIC_DIR = os.path.join(app.root_path, 'static')
-os.makedirs(STATIC_DIR, exist_ok=True)
+SSH_CONFIG = {
+    "username": "sftp",
+    "key_path": os.path.expanduser("~/.ssh/id_rsa"),
+    "remote_dir": "uploads",
+    "timeout": 10
+}
 
-def get_ssh_key():
-    return paramiko.RSAKey.from_private_key_file(SSH_KEY_PATH)
+MONGO_CLIENT = MongoClient("mongo", 27017)
+DB = MONGO_CLIENT["log_reporter"]
+LOG_COLLECTION = DB["logs"]
+PROGRESS_COLLECTION = DB["log_progress"]
 
-def fetch_logs_from_vm(ip, pkey):
-    logs = []
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    try:
-        client.connect(hostname=ip, username=SSH_USERNAME, pkey=pkey, timeout=10)
+class SSHManager:
+    def __init__(self):
+        self.pkey = paramiko.RSAKey.from_private_key_file(SSH_CONFIG["key_path"])
+
+    def _connect(self, ip):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(
+            hostname=ip,
+            username=SSH_CONFIG["username"],
+            pkey=self.pkey,
+            timeout=SSH_CONFIG["timeout"]
+        )
+        return client
+
+    def fetch_logs(self):
+        for ip in VM_IPS:
+            try:
+                with self._connect(ip) as client:
+                    self._process_vm_files(client, ip)
+            except Exception as e:
+                print(f"Connection to {ip} failed: {e}")
+
+    def _process_vm_files(self, client, ip):
         with client.open_sftp() as sftp:
             try:
-                files = sftp.listdir(REMOTE_LOG_DIR)
-                for file in files:
-                    if file.startswith("from_") and file.endswith(".txt"):
-                        with sftp.file(f"{REMOTE_LOG_DIR}/{file}", 'r') as f:
-                            for line in f:
-                                logs.append((ip, line.strip()))
+                files = sftp.listdir(SSH_CONFIG["remote_dir"])
+                for filename in self._filter_log_files(files):
+                    self._process_file(sftp, ip, filename)
             except FileNotFoundError:
-                print(f"{REMOTE_LOG_DIR} not found on {ip}")
-    except Exception as e:
-        print(f"Failed to connect to {ip}: {e}")
-    finally:
-        client.close()
-    return logs
+                print(f"Directory {SSH_CONFIG['remote_dir']} not found on {ip}")
 
-def parse_logs():
-    pkey = get_ssh_key()
-    parsed = []
-    for ip in VM_IPS:
-        print(f"Fetching logs from {ip}...")
-        logs = fetch_logs_from_vm(ip, pkey)
-        for vm_ip, entry in logs:
+    def _filter_log_files(self, files):
+        return [
+            f for f in files
+            if f.startswith("from_") and f.endswith(".txt")
+        ]
+
+    def _process_file(self, sftp, ip, filename):
+        remote_path = f"{SSH_CONFIG['remote_dir']}/{filename}"
+        progress = self._get_progress(ip, filename)
+        last_ts = progress.get("last_timestamp", datetime.min)
+
+        with sftp.file(remote_path, 'r') as f:
+            entries, max_ts = self._parse_log_lines(f, ip, last_ts)
+
+        if entries:
+            LOG_COLLECTION.insert_many(entries)
+            self._update_progress(ip, filename, max_ts)
+
+    def _get_progress(self, ip, filename):
+        return PROGRESS_COLLECTION.find_one(
+            {"vm_ip": ip, "filename": filename}
+        ) or {}
+
+    def _parse_log_lines(self, file_obj, ip, last_ts):
+        entries = []
+        max_ts = last_ts
+        for line in file_obj:
             try:
-                ts_part, meta = entry.split('] ')
-                timestamp = datetime.strptime(ts_part[1:], "%Y-%m-%d %H:%M:%S")
-                created_by = meta.split('=')[1]
-                parsed.append({'timestamp': timestamp, 'created_by': created_by, 'source_vm': vm_ip})
-            except Exception as e:
-                print(f"Skipping malformed entry '{entry}': {e}")
-    return parsed
+                timestamp, created_by = self._parse_log_line(line)
+                if timestamp > last_ts:
+                    entries.append({
+                        'timestamp': timestamp,
+                        'created_by': created_by,
+                        'source_vm': ip
+                    })
+                    max_ts = max(max_ts, timestamp)
+            except ValueError as e:
+                print(f"Invalid log entry: {line.strip()} - {e}")
+        return entries, max_ts
 
-def generate_plots(logs):
-    plots = {}
-    date_counts = defaultdict(int)
-    vm_counts = defaultdict(int)
+    @staticmethod
+    def _parse_log_line(line):
+        line = line.strip()
+        if not line.startswith('[') or '] from=' not in line:
+            raise ValueError("Invalid log format")
 
-    for entry in logs:
-        date_str = entry['timestamp'].date().isoformat()
-        date_counts[date_str] += 1
-        vm_counts[entry['source_vm']] += 1
+        ts_part, from_part = line.split('] from=')
+        timestamp = datetime.strptime(ts_part[1:], "%Y-%m-%d %H:%M:%S")
+        created_by = from_part.strip()
+        return timestamp, created_by
 
-    plt.figure(figsize=(12, 6))
-    dates = sorted(date_counts)
-    plt.bar(dates, [date_counts[d] for d in dates])
-    plt.title('Number of Log Entries Per Day')
-    plt.ylabel("Entries")
-    plt.xticks(rotation=45, ha='right')
-    plt.tight_layout()
-    path = os.path.join(STATIC_DIR, 'daily_activity.png')
-    plt.savefig(path, bbox_inches='tight')
-    plt.close()
-    plots['daily_activity'] = 'daily_activity.png'
+    def _update_progress(self, ip, filename, timestamp):
+        PROGRESS_COLLECTION.update_one(
+            {"vm_ip": ip, "filename": filename},
+            {"$set": {"last_timestamp": timestamp}},
+            upsert=True
+        )
 
-    plt.figure(figsize=(10, 6))
-    vms = sorted(vm_counts)
-    plt.bar(vms, [vm_counts[v] for v in vms])
-    plt.title('Activity by VM')
-    plt.tight_layout()
-    path = os.path.join(STATIC_DIR, 'vm_activity.png')
-    plt.savefig(path, bbox_inches='tight')
-    plt.close()
-    plots['vm_activity'] = 'vm_activity.png'
+class AnalyticsEngine:
+    @staticmethod
+    def get_recent_logs():
+        logs = LOG_COLLECTION.find().sort("timestamp", -1)
+        return [
+            {
+                "timestamp": log["timestamp"].strftime("%Y-%m-%d %H:%M:%S"),
+                "created_by": log["created_by"],
+                "source_vm": log["source_vm"]
+            }
+            for log in logs
+        ]
 
-    return plots
+    @staticmethod
+    def get_stats():
+        pipeline = [
+            {"$group": {
+                "_id": None,
+                "total": {"$sum": 1},
+                "first": {"$min": "$timestamp"},
+                "last": {"$max": "$timestamp"},
+                "vms": {"$addToSet": "$source_vm"}
+            }},
+            {"$project": {
+                "total": 1,
+                "first": 1,
+                "last": 1,
+                "unique_vms": {"$size": "$vms"}
+            }}
+        ]
+        result = LOG_COLLECTION.aggregate(pipeline)
+        return next(result, None)
 
-@app.route('/')
+    @staticmethod
+    def get_daily_activity():
+        pipeline = [
+            {"$group": {
+                "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}},
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        return list(LOG_COLLECTION.aggregate(pipeline))
+
+    @staticmethod
+    def get_vm_activity():
+        pipeline = [
+            {"$group": {"_id": "$source_vm", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}}
+        ]
+        return list(LOG_COLLECTION.aggregate(pipeline))
+
+@APP.route('/')
 def dashboard():
-    logs = parse_logs()
-    if not logs:
-        return "No log data found."
+    SSHManager().fetch_logs()
 
-    timestamps = [entry['timestamp'] for entry in logs]
-    vms = set(entry['source_vm'] for entry in logs)
+    stats = AnalyticsEngine.get_stats()
+    if not stats or not stats.get('total'):
+        return "No log data available"
 
-    stats = {
-        'total_entries': len(logs),
-        'unique_vms': len(vms),
-        'first_entry': min(timestamps).strftime("%Y-%m-%d %H:%M:%S"),
-        'last_entry': max(timestamps).strftime("%Y-%m-%d %H:%M:%S")
+    daily_activity = AnalyticsEngine.get_daily_activity()
+    vm_activity = AnalyticsEngine.get_vm_activity()
+    recent_logs = AnalyticsEngine.get_recent_logs()
+
+    context = {
+        "stats": {
+            "total_entries": stats["total"],
+            "unique_vms": stats["unique_vms"],
+            "first_entry": stats["first"].strftime("%Y-%m-%d %H:%M:%S"),
+            "last_entry": stats["last"].strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "daily_labels": [entry["_id"] for entry in daily_activity],
+        "daily_counts": [entry["count"] for entry in daily_activity],
+        "vm_labels": [entry["_id"] for entry in vm_activity],
+        "vm_counts": [entry["count"] for entry in vm_activity],
+        "recent_logs": recent_logs
     }
 
-    plots = generate_plots(logs)
-    return render_template('logs_dashboard.html', stats=stats, plots=plots)
+    return render_template('logs_dashboard.html', **context)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    APP.run(host='0.0.0.0', port=5000)
+
+

@@ -68,13 +68,6 @@ sudo -u sftp crontab -l | { cat; echo "*/5 * * * * /home/sftp/scripts/sftp-excha
 
 echo "[✓] Cron job installed."
 
-echo "[🔒] Hardening SSH settings..."
-
-sudo sed -i -E 's/^#?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i -E 's/^#?PermitEmptyPasswords .*/PermitEmptyPasswords no/' /etc/ssh/sshd_config
-
-echo "[✓] Password authentication disabled"
-
 echo "[↻] Restarting SSH service..."
 
 sudo systemctl restart ssh
@@ -84,5 +77,6 @@ sudo sed -i 's/^MIRRORS_MODE=.*/MIRRORS_MODE=0/' /etc/rkhunter.conf || echo "MIR
 
 rkhunter --update
 rkhunter --propupd
+rkhunter --check --sk || true
 
 echo "[✅] Provisioning complete. SFTP setup and SSH hardened."
