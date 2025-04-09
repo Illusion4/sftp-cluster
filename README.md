@@ -31,8 +31,8 @@ This system deploys a cluster of SFTP servers via Vagrant. A fourth VM hosts a r
 ### 1. Clone the repository
 
 ```bash
-git clone -b DEVOPS-9-sftp-automated-log-reports https://github.com/Illusion4/sftp-cluster-audit-system.git
-cd sftp-cluster-audit-system
+git clone https://github.com/Illusion4/sftp-cluster.git
+cd sftp-cluster
 ```
 
 ### 2. Start all VMs
