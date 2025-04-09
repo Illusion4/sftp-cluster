@@ -10,12 +10,7 @@ This system deploys a cluster of SFTP servers via Vagrant. A fourth VM hosts a r
 
 ## Architecture
 
-[Vagrant Host]<br>
-│<br>
-├── VM1 (SFTP Server)<br>
-├── VM2 (SFTP Server)<br>
-├── VM3 (SFTP Server)<br>
-└── VM4 (Analytics - Flask + MongoDB via Docker Compose)<br>
+![Dashboard Screenshot](img/architecture.png)
 
 ## Screenshots
 
