@@ -10,8 +10,7 @@ This system deploys a cluster of SFTP servers via Vagrant. A fourth VM hosts a r
 
 ## Architecture
 
-![Dashboard Screenshot](img/architecture.png)
-
+[<img src="img/architecture.png" height="300"/>](img/architecture.png)
 ## Screenshots
 
 ![Dashboard Screenshot](img/sftp_report.jpg)
