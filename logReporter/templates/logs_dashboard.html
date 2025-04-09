@@ -3,6 +3,11 @@
 <head>
     <title>SFTP Log Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- DataTables CSS & JS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,6 +25,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 2rem;
+            margin-bottom: 2rem;
         }
         .chart-card {
             background: #ffffff;
@@ -60,6 +66,28 @@
             <h3>🖥️ VM Activity</h3>
             <canvas id="vmChart"></canvas>
         </div>
+    </div>
+
+    <div class="stats-card">
+        <h2>📋 Recent Log Entries</h2>
+        <table id="logsTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Created By</th>
+                    <th>Source VM</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_logs %}
+                <tr>
+                    <td>{{ log.timestamp }}</td>
+                    <td>{{ log.created_by }}</td>
+                    <td>{{ log.source_vm }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     <script>
@@ -104,7 +132,14 @@
                 }
             }
         });
-        
+
+        $(document).ready(function() {
+        $('#logsTable').DataTable({
+            pageLength: 10,
+            lengthMenu: [5, 10, 25, 50],
+            order: [[0, 'desc']],
+        });
+    });
     </script>
 </body>
 </html>

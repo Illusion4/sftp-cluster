@@ -111,6 +111,18 @@ class SSHManager:
 
 class AnalyticsEngine:
     @staticmethod
+    def get_recent_logs():
+        logs = LOG_COLLECTION.find().sort("timestamp", -1)
+        return [
+            {
+                "timestamp": log["timestamp"].strftime("%Y-%m-%d %H:%M:%S"),
+                "created_by": log["created_by"],
+                "source_vm": log["source_vm"]
+            }
+            for log in logs
+        ]
+
+    @staticmethod
     def get_stats():
         pipeline = [
             {"$group": {
@@ -159,6 +171,7 @@ def dashboard():
 
     daily_activity = AnalyticsEngine.get_daily_activity()
     vm_activity = AnalyticsEngine.get_vm_activity()
+    recent_logs = AnalyticsEngine.get_recent_logs()
 
     context = {
         "stats": {
@@ -170,7 +183,8 @@ def dashboard():
         "daily_labels": [entry["_id"] for entry in daily_activity],
         "daily_counts": [entry["count"] for entry in daily_activity],
         "vm_labels": [entry["_id"] for entry in vm_activity],
-        "vm_counts": [entry["count"] for entry in vm_activity]
+        "vm_counts": [entry["count"] for entry in vm_activity],
+        "recent_logs": recent_logs
     }
 
     return render_template('logs_dashboard.html', **context)

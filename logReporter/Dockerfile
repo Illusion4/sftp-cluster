@@ -1,4 +1,4 @@
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 WORKDIR /app
 
@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir --no-compile -r requirements.txt
 
 COPY . .
 
-CMD ["python", "-u", "app.py"]
+CMD ["python", "app.py"]
